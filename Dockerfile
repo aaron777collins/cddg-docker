@@ -1,101 +1,98 @@
-FROM ubuntu:18.04 as builder
-MAINTAINER Daniel Guerra
-
-# Install packages
-
-ENV DEBIAN_FRONTEND noninteractive
-RUN sed -i "s/# deb-src/deb-src/g" /etc/apt/sources.list
-RUN apt-get -y update
-RUN apt-get -yy upgrade
-ENV BUILD_DEPS="git autoconf pkg-config libssl-dev libpam0g-dev \
-    libx11-dev libxfixes-dev libxrandr-dev nasm xsltproc flex \
-    bison libxml2-dev dpkg-dev libcap-dev"
-RUN apt-get -yy install  sudo apt-utils software-properties-common $BUILD_DEPS
-
-
-# Build xrdp
-
-WORKDIR /tmp
-RUN apt-get source pulseaudio
-RUN apt-get build-dep -yy pulseaudio
-WORKDIR /tmp/pulseaudio-11.1
-RUN dpkg-buildpackage -rfakeroot -uc -b
-WORKDIR /tmp
-RUN git clone --branch v0.9.16 --recursive https://github.com/neutrinolabs/xrdp.git
-WORKDIR /tmp/xrdp
-RUN ./bootstrap
-RUN ./configure
-RUN make
-RUN make install
-WORKDIR /tmp
-RUN  apt -yy install libpulse-dev
-RUN git clone --recursive https://github.com/neutrinolabs/pulseaudio-module-xrdp.git
-WORKDIR /tmp/pulseaudio-module-xrdp
-RUN ./bootstrap && ./configure PULSE_DIR=/tmp/pulseaudio-11.1
-RUN make
-RUN mkdir -p /tmp/so
-RUN cp src/.libs/*.so /tmp/so
-
 FROM ubuntu:18.04
-ARG ADDITIONAL_PACKAGES=""
-ENV ADDITIONAL_PACKAGES=${ADDITIONAL_PACKAGES}
-ENV DEBIAN_FRONTEND noninteractive
-RUN apt update && apt install -y software-properties-common
-RUN add-apt-repository "deb http://archive.canonical.com/ $(lsb_release -sc) partner" && apt update
-RUN apt -y full-upgrade && apt install -y \
-  adobe-flashplugin \
-  browser-plugin-freshplayer-pepperflash \
-  ca-certificates \
-  crudini \
-  firefox \
-  less \
-  locales \
-  openssh-server \
-  pulseaudio \
-  sudo \
-  supervisor \
-  uuid-runtime \
-  vim \
-  vlc \
-  wget \
-  xauth \
-  xautolock \
-  xfce4 \
-  xfce4-clipman-plugin \
-  xfce4-cpugraph-plugin \
-  xfce4-netload-plugin \
-  xfce4-screenshooter \
-  xfce4-taskmanager \
-  xfce4-terminal \
-  xfce4-xkb-plugin \
-  xorgxrdp \
-  xprintidle \
-  xrdp \
-  $ADDITIONAL_PACKAGES && \
-  apt-get remove -yy xscreensaver && \
-  apt-get autoremove -yy && \
-  rm -rf /var/cache/apt /var/lib/apt/lists && \
-  mkdir -p /var/lib/xrdp-pulseaudio-installer
-COPY --from=builder /tmp/so/module-xrdp-source.so /var/lib/xrdp-pulseaudio-installer
-COPY --from=builder /tmp/so/module-xrdp-sink.so /var/lib/xrdp-pulseaudio-installer
-ADD bin /usr/bin
-ADD etc /etc
-ADD autostart /etc/xdg/autostart
-#ADD pulse /usr/lib/pulse-10.0/modules/
 
-# Configure
-RUN mkdir /var/run/dbus && \
-  cp /etc/X11/xrdp/xorg.conf /etc/X11 && \
-  sed -i "s/console/anybody/g" /etc/X11/Xwrapper.config && \
-  sed -i "s/xrdp\/xorg/xorg/g" /etc/xrdp/sesman.ini && \
-  locale-gen en_US.UTF-8 && \
-  echo "xfce4-session" > /etc/skel/.Xclients && \
-  cp -r /etc/ssh /ssh_orig && \
-  rm -rf /etc/ssh/* && \
-  rm -rf /etc/xrdp/rsakeys.ini /etc/xrdp/*.pem
+ADD bin /usr/bin
+
+RUN apt-get update -yy && apt-get upgrade -yy
 
 # Docker config
 VOLUME ["/etc/ssh","/home"]
-EXPOSE 3389 22 9001
+
+RUN apt install -yy \
+  openssh-server
+# RUN ufw allow ssh
+
+RUN mkdir /var/run/xrdp
+RUN mkdir /var/run/xrdp-sesman
+
+RUN apt update && apt -y upgrade
+ARG DEBIAN_FRONTEND=noninteractive
+RUN apt install -y xfce4
+RUN apt-get install -yy xrdp
+RUN cp /etc/xrdp/xrdp.ini /etc/xrdp/xrdp.ini.bak
+# RUN sed -i 's/3389/3390/g' /etc/xrdp/xrdp.ini
+RUN sed -i 's/max_bpp=32/#max_bpp=32\nmax_bpp=128/g' /etc/xrdp/xrdp.ini
+RUN sed -i 's/xserverbpp=24/#xserverbpp=24\nxserverbpp=128/g' /etc/xrdp/xrdp.ini
+RUN /etc/init.d/xrdp start
+
+#Install new parts
+RUN apt install -yy \
+  build-essential \
+  gcc \
+  g++ \
+  bison \
+  flex \
+  perl \
+  tcl-dev \
+  tk-dev \
+  blt \
+  libxml2-dev \
+  zlib1g-dev \
+  default-jre \
+  doxygen \
+  graphviz \
+  libwebkitgtk-1.0-0 \
+  openmpi-bin \
+  libopenmpi-dev \
+  libpcap-dev \
+  autoconf \
+  automake \
+  libtool \
+  libproj-dev \
+  libgdal-dev \
+  libxerces-c-dev \
+  qt4-dev-tools
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN mkdir /var/run/sshd
+
+RUN apt-get install -yy supervisor
+
+# ADD etc/supervisor /etc/supervisor
+COPY etc/supervisor/supervisord.conf /etc/supervisor/supervisord.conf
+ADD etc/supervisor/conf.d /etc/supervisor/conf.d
+
+# ARG DEBIAN_FRONTEND=noninteractive
+# RUN adduser ubuntu
+# RUN usermod -aG sudo ubuntu
+
+COPY etc/users.list /etc/users.list
+
+RUN apt-get update && apt-get -y install sudo
+RUN useradd -m ubuntu && echo "ubuntu:ubuntu" | chpasswd && adduser ubuntu sudo
+
+RUN usermod -aG sudo ubuntu
+RUN adduser xrdp ssl-cert
+
+RUN mkdir -p /home/ubuntu
+
+# Fun tools
+RUN apt-get -yy install htop net-tools \
+# xfce4-terminal \
+x-terminal-emulator \
+firefox \
+git
+
+WORKDIR /home/ubuntu
+RUN mkdir -p /repos
+WORKDIR /home/ubuntu/repos
+RUN git clone https://github.com/aaron777collins/ConnectedDrivingDataGenerator.git
+
+# VOLUME ["/etc/ssh","/home"]
+EXPOSE 3389 22 9001 3350
 ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
 CMD ["supervisord"]
+
+RUN rm /var/run/xrdp/xrdp-sesman.pid
+
+RUN update-alternatives --config x-terminal-emulator

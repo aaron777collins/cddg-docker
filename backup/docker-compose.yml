@@ -3,7 +3,7 @@ services:
   terminalserver:
     build: ./
     # image: danielguerra/ubuntu-xrdp:latest
-    container_name: uxrdp2
+    container_name: uxrdp
     hostname: terminalserver
     restart: always
     shm_size: 1g
@@ -13,8 +13,6 @@ services:
     ports:
       - "3389:3389"
       - "2222:22"
-      - "9001:9001"
-      - "3350:3350"
     volumes:
       - ssh:/etc/ssh/
       - home:/home
