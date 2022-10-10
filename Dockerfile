@@ -79,7 +79,7 @@ RUN mkdir -p /home/ubuntu
 # Fun tools
 RUN apt-get -yy install htop net-tools \
 # xfce4-terminal \
-x-terminal-emulator \
+gnome-terminal \
 firefox \
 git
 
@@ -95,4 +95,4 @@ CMD ["supervisord"]
 
 RUN rm /var/run/xrdp/xrdp-sesman.pid
 
-RUN update-alternatives --config x-terminal-emulator
+# RUN update-alternatives --config x-terminal-emulator
