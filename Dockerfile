@@ -50,7 +50,8 @@ RUN apt install -yy \
   libproj-dev \
   libgdal-dev \
   libxerces-c-dev \
-  qt4-dev-tools
+  qt4-dev-tools \
+  libfox-1.6-dev
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -76,23 +77,58 @@ RUN adduser xrdp ssl-cert
 
 RUN mkdir -p /home/ubuntu
 
+RUN apt-get -yy install locales && locale-gen en_US.UTF-8
+
 # Fun tools
 RUN apt-get -yy install htop net-tools \
-# xfce4-terminal \
+xfce4-terminal \
 gnome-terminal \
 firefox \
-git
+git \
+nano \
+terminator
+
+RUN wget -qO - https://download.sublimetext.com/sublimehq-pub.gpg | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/sublimehq-archive.gpg \
+&& echo "deb https://download.sublimetext.com/ apt/stable/" | sudo tee /etc/apt/sources.list.d/sublime-text.list && apt-get update && apt-get -yy install sublime-text
 
 WORKDIR /home/ubuntu
 RUN mkdir -p /repos
 WORKDIR /home/ubuntu/repos
 RUN git clone https://github.com/aaron777collins/ConnectedDrivingDataGenerator.git
 
+# RUN chmod +x /usr/bin/start.sh
+
+RUN apt-get -y install locales software-properties-common
+
+RUN touch /usr/share/locale/locale.alias
+
+# Set the locale
+RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && \
+    locale-gen
+ENV LANG en_US.UTF-8
+ENV LANGUAGE en_US:en
+ENV LC_ALL en_US.UTF-8
+
+RUN gsettings set org.gnome.desktop.default-applications.terminal exec /usr/bin/terminator && gsettings set org.gnome.desktop.default-applications.terminal exec-arg "-x"
+
 # VOLUME ["/etc/ssh","/home"]
 EXPOSE 3389 22 9001 3350
+# ENTRYPOINT ["/usr/bin/docker-entrypoint.sh", "/bin/bash", "/usr/bin/start.sh"]
 ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
 CMD ["supervisord"]
 
 RUN rm /var/run/xrdp/xrdp-sesman.pid
 
 # RUN update-alternatives --config x-terminal-emulator
+
+RUN add-apt-repository ppa:sumo/stable && apt-get update && apt-get -yy install sumo sumo-tools sumo-doc
+
+WORKDIR /home/ubuntu/repos
+RUN wget -O omnetpp-5.7.tgz https://github.com/omnetpp/omnetpp/releases/download/omnetpp-5.7/omnetpp-5.7-linux-x86_64.tgz
+RUN tar --extract --file omnetpp-5.7.tgz
+WORKDIR /home/ubuntu/repos/omnetpp-5.7
+RUN apt-get -yy install qt5-default openscenegraph
+RUN apt-add-repository universe && apt-get update && apt-get -yy install libopenscenegraph-dev
+RUN apt-get -yy install libgeos-dev libosgearth-dev libopenmpi-dev
+ENV QT_SELECT=5
+RUN ["/bin/bash", "-c", "source ./setenv && export QT_SELECT=5 && ./configure && make"]
