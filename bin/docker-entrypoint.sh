@@ -26,7 +26,6 @@ if [ ! -f "/etc/ssh/ssh_host_rsa_key" ];
 		ssh-keygen -f /etc/ssh/ssh_host_rsa_key -N '' -t rsa
 fi
 
-
 # generate fresh dsa key if needed
 if [ ! -f "/etc/ssh/ssh_host_dsa_key" ];
 	then
