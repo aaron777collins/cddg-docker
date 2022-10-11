@@ -15,4 +15,5 @@ while read id username hash groups; do
         if [ $groups ]; then
                 usermod -aG $groups $username
         fi
+
 done < /etc/users.list
